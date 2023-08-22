@@ -1,0 +1,4 @@
+pandas==1.5.3
+audiolazy==0.6
+MIDIUtil==1.2.1
+paho-mqtt==1.6.1
