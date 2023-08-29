@@ -1,7 +1,12 @@
+import datetime
+import subprocess
+
 import pandas as pd
 from audiolazy import str2midi, midi2str
 from midiutil import MIDIFile
 import paho.mqtt.client as mqtt
+
+import config
 
 
 def map_value(value, min_value, max_value, min_result, max_result):
@@ -9,10 +14,10 @@ def map_value(value, min_value, max_value, min_result, max_result):
     return result
 
 
-def music_from_data(rawdata: str):
-    filename = 'heart' #name of csv data file
-    print((rawdata))
-    print(type(rawdata))
+def music_from_bulk_data(rawdata: str):
+    filename = 'heart_' + str(datetime.datetime.now())
+    # print(type(rawdata))
+    # print((rawdata))
     lines = rawdata.strip().split("\n")
     print(type(lines))
     df = pd.DataFrame({"intensity": lines})
@@ -65,21 +70,16 @@ def music_from_data(rawdata: str):
     with open(filename + '.mid', "wb") as f:
         my_midi_file.writeFile(f)
 
-    import subprocess
-
-    # Command to run
     command = [
         "fluidsynth",
         "-ni",
-        "./soundfont/Dore Mark's NY S&S Model B-v5.2.sf2",
-        "heart.mid",
+        config.soundfont_name,
+        filename + '.mid',
         "-F",
-        "output.wav",
+        filename + '.wav',
         "-r",
         "44100"
     ]
-
-    # Run the command
     try:
         subprocess.run(command, check=True)
         print("Command executed successfully.")
@@ -87,20 +87,32 @@ def music_from_data(rawdata: str):
         print("Error:", e)
 
 
+nr_messages = 0
+buffered_result = ""
+
+def buffer_data_chunks(rawdata: str):
+    global nr_messages, buffered_result
+    nr_messages += 1
+    buffered_result += rawdata + "\n"
+    if nr_messages >= config.number_messages_once:
+        print("flushed")
+        music_from_bulk_data(buffered_result)
+        nr_messages = 0
+        buffered_result = ""
+
+
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
-    client.subscribe("/datatomusic")
+    client.subscribe(config.mqtt_topic)
 
 
 def on_message(client, userdata, msg):
-    print(msg.topic+" "+str(msg.payload))
-    music_from_data(msg.payload.decode('utf-8'))
+    buffer_data_chunks(msg.payload.decode('utf-8'))
 
 
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
 
-client.connect("localhost", 1883, 60)
-
+client.connect(config.mqtt_host, 1883, 60)
 client.loop_forever()
