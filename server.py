@@ -1,5 +1,6 @@
 import datetime
 import subprocess
+import os
 
 import pandas as pd
 from audiolazy import str2midi, midi2str
@@ -16,10 +17,7 @@ def map_value(value, min_value, max_value, min_result, max_result):
 
 def music_from_bulk_data(rawdata: str):
     filename = 'heart_' + str(datetime.datetime.now())
-    # print(type(rawdata))
-    # print((rawdata))
     lines = rawdata.strip().split("\n")
-    print(type(lines))
     df = pd.DataFrame({"intensity": lines})
     df['time'] = df.index
     df['intensity'] = pd.to_numeric(df['intensity'], errors='coerce')
@@ -82,20 +80,23 @@ def music_from_bulk_data(rawdata: str):
     ]
     try:
         subprocess.run(command, check=True)
-        print("Command executed successfully.")
     except subprocess.CalledProcessError as e:
         print("Error:", e)
+    try:
+        os.remove(filename + '.mid')
+    except FileNotFoundError:
+        print("The mid file does not exist.")
 
 
 nr_messages = 0
 buffered_result = ""
+
 
 def buffer_data_chunks(rawdata: str):
     global nr_messages, buffered_result
     nr_messages += 1
     buffered_result += rawdata + "\n"
     if nr_messages >= config.number_messages_once:
-        print("flushed")
         music_from_bulk_data(buffered_result)
         nr_messages = 0
         buffered_result = ""
