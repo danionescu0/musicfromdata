@@ -75,6 +75,14 @@ python server.py
 ./emulateESP32.sh localhost /datatomusic
 ````
 This will push data from the heart.csv sample into MQTT
+![EKG](https://github.com/danionescu0/musicfromdata/blob/main/resources/ekg1.png)
+
+6) Display EKG or EMG graph on screen
+
+````shell
+python plot.py
+````
+
 
 ## Setup the ESP32 data acquisition board
 

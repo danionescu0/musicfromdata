@@ -86,6 +86,7 @@ def music_from_bulk_data(rawdata: str):
         os.remove(filename + '.mid')
     except FileNotFoundError:
         print("The mid file does not exist.")
+    print("done rendering")
 
 
 nr_messages = 0
@@ -103,7 +104,7 @@ def buffer_data_chunks(rawdata: str):
 
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code "+str(rc))
+    print("Connected to MQTT server with result code: {0}, subscribing to topic: {1}".format(str(rc), config.mqtt_topic))
     client.subscribe(config.mqtt_topic)
 
 
@@ -114,6 +115,5 @@ def on_message(client, userdata, msg):
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
-
 client.connect(config.mqtt_host, 1883, 60)
 client.loop_forever()
