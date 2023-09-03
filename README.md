@@ -17,7 +17,7 @@ For this transformation, we harness a software named "fluidsynth." Fluidsynth re
 Streaming & Playback: The culminating step involves either playing the WAV file locally or uploading it to a streaming platform, such as YouTube Music.
 
 Acknowledgements:
-Our project owes much to the pioneering work of SYSTEMSounds. For more information, check out their sonification tutorials on GitHub.
+My project owes much to the pioneering work of SYSTEMSounds. For more information, check out their sonification tutorials on GitHub: https://github.com/SYSTEMSounds/sonification-tutorials
 
 
 ## Develop the project 
@@ -113,5 +113,5 @@ pip install jupyter
 
 To run
 ````shell
-jupyter notebook
+jupyter notebook processing_music.ipynb
 ````

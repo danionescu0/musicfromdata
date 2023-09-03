@@ -3,16 +3,29 @@ import subprocess
 import os
 
 import pandas as pd
+import pygame
 from audiolazy import str2midi, midi2str
+from scipy.signal import savgol_filter
 from midiutil import MIDIFile
+from midi2audio import FluidSynth
 import paho.mqtt.client as mqtt
+from pydub import AudioSegment
 
 import config
+
+
+pygame.init()
 
 
 def map_value(value, min_value, max_value, min_result, max_result):
     result = min_result + (value - min_value)/(max_value - min_value)*(max_result - min_result)
     return result
+
+
+def transform_to_wav(input_midi: str, output_wav: str, sf2_path: str):
+    fs = FluidSynth(sf2_path)
+    fs.midi_to_audio(input_midi, output_wav)
+    print(f'Audio saved to {output_wav}')
 
 
 def music_from_bulk_data(rawdata: str):
@@ -23,10 +36,15 @@ def music_from_bulk_data(rawdata: str):
     df['intensity'] = pd.to_numeric(df['intensity'], errors='coerce')
     # Drop NaN values from that column
     df.dropna(subset=['intensity'], inplace=True)
-    print(df.head(16))
 
-    time = df['time'].values    #this is a numpy array (not a list), you can do mathematical operations directly on the object
+    time = df['time'].values
     intensity = df['intensity'].values
+
+    #smooth data
+    window_length = 7  # Adjust this value to your needs, must be odd
+    poly_order = 4  # Polynomial order. You can play around with this value
+    intensity = savgol_filter(intensity, window_length, poly_order)
+
     millis_per_beat = 930
     times_millis = max(time) - time
     t_data = times_millis/millis_per_beat #rescale time from Myrs to beats
@@ -58,35 +76,54 @@ def music_from_bulk_data(rawdata: str):
     duration_sec = duration_beats*60/bpm #duration in seconds
     print('Duration:', duration_sec, 'seconds')
 
-    #create midi file object, add tempo
-    my_midi_file = MIDIFile(1) #one track
-    my_midi_file.addTempo(track=0, time=0, tempo=bpm)
-    #add midi notes
-    for i in range(len(t_data)):
-        my_midi_file.addNote(track=0, channel=0, time=t_data[i], pitch=midi_data[i], volume=vel_data[i], duration=2)
-    #create and save the midi file itself
-    with open(filename + '.mid', "wb") as f:
-        my_midi_file.writeFile(f)
+    # Determine the threshold for the top 10% of velocities
+    sorted_velocity_data = sorted(vel_data)
+    threshold_index = int(0.8 * len(sorted_velocity_data))
+    threshold_velocity = sorted_velocity_data[threshold_index]
+    print("Threshold velocity:", threshold_velocity)
 
-    command = [
-        "fluidsynth",
-        "-ni",
-        config.soundfont_name,
-        filename + '.mid',
-        "-F",
-        filename + '.wav',
-        "-r",
-        "44100"
-    ]
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError as e:
-        print("Error:", e)
-    try:
-        os.remove(filename + '.mid')
-    except FileNotFoundError:
-        print("The mid file does not exist.")
-    print("done rendering")
+    # Create MIDI file
+    bpm = 60
+    duration_sec = duration_beats * 60 / bpm
+    print('Duration:', duration_sec, 'seconds')
+
+    # Create MIDI files for violin and drum
+    violin_midi = MIDIFile(1)
+    drum_midi = MIDIFile(1)
+
+    # Add tempo for both MIDI files
+    violin_midi.addTempo(track=0, time=0, tempo=bpm)
+    drum_midi.addTempo(track=0, time=0, tempo=bpm)
+
+    # Add notes based on the threshold condition
+    for i in range(len(t_data)):
+        if vel_data[i] > threshold_velocity:
+            drum_midi.addNote(track=0, channel=0, time=t_data[i], pitch=midi_data[i], volume=vel_data[i], duration=2)
+        else:
+            violin_midi.addNote(track=0, channel=0, time=t_data[i], pitch=midi_data[i], volume=vel_data[i], duration=2)
+
+    # Save the violin MIDI file
+    with open(filename + '_violin.mid', "wb") as f:
+        violin_midi.writeFile(f)
+
+    # Save the drum MIDI file
+    with open(filename + '_drum.mid', "wb") as f:
+        drum_midi.writeFile(f)
+
+    transform_to_wav(filename + '_violin.mid', filename + '_violin.wav', "./soundfontLevi_s_Violin.sf2")
+    transform_to_wav(filename + '_drum.mid', filename + '_drum.wav', "./soundfont/Bejeweled_3_Percussions__SF2_.sf2")
+
+    # Load the two audio files
+    file1 = AudioSegment.from_wav(filename + '_violin.wav')
+    file2 = AudioSegment.from_wav(filename + '_drum.wav')
+
+    # Overlay the two files
+    combined_audio = file1.overlay(file2)
+
+    # Export the combined audio to a new file
+    combined_audio.export(filename + "_combined_output.wav", format="wav")
+    my_sound = pygame.mixer.Sound(filename + "_combined_output.wav")
+    my_sound.play()
 
 
 nr_messages = 0
